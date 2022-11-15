@@ -152,7 +152,7 @@ func MatchContainerOutput(
 		ns = f.Namespace.Name
 	}
 	podClient := e2epod.PodClientNS(f, ns)
-
+	fmt.Fprintf(ginkgo.GinkgoWriter, "match container pod %s", pod)
 	createdPod := podClient.Create(pod)
 	defer func() {
 		ginkgo.By("delete the pod")

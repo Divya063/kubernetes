@@ -409,17 +409,22 @@ kube::golang::set_platform_envs() {
     kube::log::error_exit "!!! Internal error. No platform set in kube::golang::set_platform_envs"
   }
 
-  export GOOS=${platform%/*}
-  export GOARCH=${platform##*/}
+  export GOOS=linux
+  export GOARCH=amd64
+
+  platform="linux/amd64"
+  echo $platform
 
   # Do not set CC when building natively on a platform, only if cross-compiling
   if [[ $(kube::golang::host_platform) != "$platform" ]]; then
+    echo "Coming here"
+  
     # Dynamic CGO linking for other server architectures than host architecture goes here
     # If you want to include support for more server platforms than these, add arch-specific gcc names here
     case "${platform}" in
       "linux/amd64")
-        export CGO_ENABLED=1
-        export CC=${KUBE_LINUX_AMD64_CC:-x86_64-linux-gnu-gcc}
+        export CGO_ENABLED=0
+        echo $CGO_ENABLED
         ;;
       "linux/arm")
         export CGO_ENABLED=1
@@ -710,6 +715,8 @@ kube::golang::build_binaries_for_platform() {
   umask 0022
 
   local platform=$1
+  echo "Hello everyone"
+  echo $platform
 
   local -a statics=()
   local -a nonstatics=()
@@ -889,6 +896,9 @@ kube::golang::build_binaries() {
       kube::log::status "Building go targets for {${platforms[*]}} in parallel (output will appear in a burst when complete):" "${targets[@]}"
       local platform
       for platform in "${platforms[@]}"; do (
+          echo "yo"
+          echo platform
+          echo "bye"
           kube::golang::set_platform_envs "${platform}"
           kube::log::status "${platform}: build started"
           kube::golang::build_binaries_for_platform "${platform}"
@@ -908,6 +918,10 @@ kube::golang::build_binaries() {
       exit "${fails}"
     else
       for platform in "${platforms[@]}"; do
+        echo "yo"
+        echo $platform
+        echo "bye"
+        platform="linux/amd64"
         kube::log::status "Building go targets for ${platform}"
         (
           kube::golang::set_platform_envs "${platform}"

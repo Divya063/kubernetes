@@ -88,6 +88,7 @@ var (
 // Eventual goal is to merge this with integration test framework.
 type Framework struct {
 	BaseName string
+	Secret   []string
 
 	// Set together with creating the ClientSet and the namespace.
 	// Guaranteed to be unique in the cluster even when running the same
@@ -155,21 +156,29 @@ func NewFrameworkWithCustomTimeouts(baseName string, timeouts *TimeoutContext) *
 // initializes the framework instance. It cleans up with a DeferCleanup,
 // which runs last, so a AfterEach in the test still has a valid framework
 // instance.
-func NewDefaultFramework(baseName string) *Framework {
+func NewDefaultFramework(baseName string, secrets ...string) *Framework {
 	options := Options{
 		ClientQPS:   20,
 		ClientBurst: 50,
 	}
-	return NewFramework(baseName, options, nil)
+	var secretVal string
+	secretVal = ""
+	if len(secrets) > 0 {
+		secretVal = secrets[0]
+	}
+
+	return NewFramework(baseName, options, nil, secretVal)
 }
 
 // NewFramework creates a test framework.
-func NewFramework(baseName string, options Options, client clientset.Interface) *Framework {
+func NewFramework(baseName string, options Options, client clientset.Interface, secrets ...string) *Framework {
+	log("level", "new framework:secrets %s", secrets)
 	f := &Framework{
 		BaseName:  baseName,
 		Options:   options,
 		ClientSet: client,
 		Timeouts:  NewTimeoutContextWithDefaults(),
+		Secret:    secrets,
 	}
 
 	// The order is important here: if the extension calls ginkgo.BeforeEach
@@ -441,6 +450,39 @@ func (f *Framework) CreateNamespace(baseName string, labels map[string]string) (
 	// check ns instead of err to see if it's nil as we may
 	// fail to create serviceAccount in it.
 	f.AddNamespacesToDelete(ns)
+	fmt.Fprintf(ginkgo.GinkgoWriter, "SecretCreate %s", f.Secret)
+	log("level", "is secret created here number %s %s", len(f.Secret[0]), f.Secret[0])
+
+	if len(f.Secret) > 0 && len(f.Secret[0]) > 0 {
+		secretsInfo := strings.Split(f.Secret[0], ":")
+		fmt.Println("SecretsInfo", secretsInfo)
+		secretName := secretsInfo[0]
+		secretNamespace := secretsInfo[1]
+
+		secret, err := f.ClientSet.CoreV1().Secrets(secretNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+		fmt.Println("Creating secrets", secret)
+		if err != nil {
+			return ns, err
+		}
+
+		newSecret := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secret.Name,
+				Namespace: ns.Name,
+			},
+			Data: secret.Data,
+			Type: secret.Type,
+		}
+
+		fmt.Println("Namespace", ns.Name)
+		_, err = f.ClientSet.CoreV1().Secrets(ns.Name).Create(context.TODO(), newSecret, metav1.CreateOptions{})
+		log("level", "dumping secrets %s", newSecret)
+
+		if err != nil {
+			return ns, err
+		}
+
+	}
 
 	return ns, err
 }

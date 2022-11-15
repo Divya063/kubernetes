@@ -18,6 +18,7 @@ package node
 
 import (
 	"fmt"
+	"strings"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -33,7 +34,11 @@ import (
 )
 
 var _ = SIGDescribe("Downward API", func() {
-	f := framework.NewDefaultFramework("downward-api")
+	secretValue := imageutils.GetSecrets()
+	fmt.Println(secretValue)
+	// secrets := strings.Split(secretValue, ":")
+	// secretName := secrets[0]
+	f := framework.NewDefaultFramework("downward-api", secretValue)
 	f.NamespacePodSecurityEnforceLevel = admissionapi.LevelPrivileged
 
 	/*
@@ -41,9 +46,14 @@ var _ = SIGDescribe("Downward API", func() {
 	   Testname: DownwardAPI, environment for name, namespace and ip
 	   Description: Downward API MUST expose Pod and Container fields as environment variables. Specify Pod Name, namespace and IP as environment variable in the Pod Spec are visible at runtime in the container.
 	*/
-	framework.ConformanceIt("should provide pod name, namespace and IP address as env vars [NodeConformance]", func() {
+	framework.ConformanceIt("[DownwardAPI] should provide pod name, namespace and IP address as env vars [NodeConformance]", func() {
 		podName := "downward-api-" + string(uuid.NewUUID())
 		env := []v1.EnvVar{
+			{
+
+				Name:  "SECRETS",
+				Value: secretValue,
+			},
 			{
 				Name: "POD_NAME",
 				ValueFrom: &v1.EnvVarSource{
@@ -87,9 +97,14 @@ var _ = SIGDescribe("Downward API", func() {
 	   Testname: DownwardAPI, environment for host ip
 	   Description: Downward API MUST expose Pod and Container fields as environment variables. Specify host IP as environment variable in the Pod Spec are visible at runtime in the container.
 	*/
-	framework.ConformanceIt("should provide host IP as an env var [NodeConformance]", func() {
+	framework.ConformanceIt("[DownwardAPI] should provide host IP as an env var [NodeConformance]", func() {
 		podName := "downward-api-" + string(uuid.NewUUID())
 		env := []v1.EnvVar{
+			{
+
+				Name:  "SECRETS",
+				Value: secretValue,
+			},
 			{
 				Name: "HOST_IP",
 				ValueFrom: &v1.EnvVarSource{
@@ -108,9 +123,17 @@ var _ = SIGDescribe("Downward API", func() {
 		testDownwardAPI(f, podName, env, expectations)
 	})
 
-	ginkgo.It("should provide host IP and pod IP as an env var if pod uses host network [LinuxOnly]", func() {
+	ginkgo.It("[DownwardAPI] should provide host IP and pod IP as an env var if pod uses host network [LinuxOnly]", func() {
 		podName := "downward-api-" + string(uuid.NewUUID())
+		secretValue := imageutils.GetSecrets()
+		secrets := strings.Split(secretValue, ":")
+		secretName := secrets[0]
 		env := []v1.EnvVar{
+			{
+
+				Name:  "SECRETS",
+				Value: secretValue,
+			},
 			{
 				Name: "HOST_IP",
 				ValueFrom: &v1.EnvVarSource{
@@ -149,11 +172,17 @@ var _ = SIGDescribe("Downward API", func() {
 						Env:     env,
 					},
 				},
-				HostNetwork:   true,
+				HostNetwork: true,
+				ImagePullSecrets: []v1.LocalObjectReference{
+					{
+						Name: secretName,
+					},
+				},
 				RestartPolicy: v1.RestartPolicyNever,
 			},
 		}
 
+		fmt.Fprintf(ginkgo.GinkgoWriter, "pod %s", pod)
 		testDownwardAPIUsingPod(f, pod, env, expectations)
 
 	})
@@ -163,9 +192,16 @@ var _ = SIGDescribe("Downward API", func() {
 	   Testname: DownwardAPI, environment for CPU and memory limits and requests
 	   Description: Downward API MUST expose CPU request and Memory request set through environment variables at runtime in the container.
 	*/
-	framework.ConformanceIt("should provide container's limits.cpu/memory and requests.cpu/memory as env vars [NodeConformance]", func() {
+	framework.ConformanceIt("[DownwardAPI] should provide container's limits.cpu/memory and requests.cpu/memory as env vars [NodeConformance]", func() {
 		podName := "downward-api-" + string(uuid.NewUUID())
+		secretValue := imageutils.GetSecrets()
+		fmt.Println(secretValue)
 		env := []v1.EnvVar{
+			{
+
+				Name:  "SECRETS",
+				Value: secretValue,
+			},
 			{
 				Name: "CPU_LIMIT",
 				ValueFrom: &v1.EnvVarSource{
@@ -214,9 +250,18 @@ var _ = SIGDescribe("Downward API", func() {
 	   Testname: DownwardAPI, environment for default CPU and memory limits and requests
 	   Description: Downward API MUST expose CPU request and Memory limits set through environment variables at runtime in the container.
 	*/
-	framework.ConformanceIt("should provide default limits.cpu/memory from node allocatable [NodeConformance]", func() {
+	framework.ConformanceIt("[DownwardAPI] should provide default limits.cpu/memory from node allocatable [NodeConformance]", func() {
+		secretValue := imageutils.GetSecrets()
+		secrets := strings.Split(secretValue, ":")
+		secretName := secrets[0]
+
 		podName := "downward-api-" + string(uuid.NewUUID())
 		env := []v1.EnvVar{
+			{
+
+				Name:  "SECRETS",
+				Value: secretValue,
+			},
 			{
 				Name: "CPU_LIMIT",
 				ValueFrom: &v1.EnvVarSource{
@@ -253,8 +298,15 @@ var _ = SIGDescribe("Downward API", func() {
 					},
 				},
 				RestartPolicy: v1.RestartPolicyNever,
+				ImagePullSecrets: []v1.LocalObjectReference{
+					{
+						Name: secretName,
+					},
+				},
 			},
 		}
+
+		fmt.Fprintf(ginkgo.GinkgoWriter, "pod %s", pod)
 
 		testDownwardAPIUsingPod(f, pod, env, expectations)
 	})
@@ -264,9 +316,17 @@ var _ = SIGDescribe("Downward API", func() {
 	   Testname: DownwardAPI, environment for Pod UID
 	   Description: Downward API MUST expose Pod UID set through environment variables at runtime in the container.
 	*/
-	framework.ConformanceIt("should provide pod UID as env vars [NodeConformance]", func() {
+	framework.ConformanceIt("[DownwardAPI] should provide pod UID as env vars [NodeConformance]", func() {
+
 		podName := "downward-api-" + string(uuid.NewUUID())
+		secretValue := imageutils.GetSecrets()
 		env := []v1.EnvVar{
+
+			{
+
+				Name:  "SECRETS",
+				Value: secretValue,
+			},
 			{
 				Name: "POD_UID",
 				ValueFrom: &v1.EnvVarSource{
@@ -287,13 +347,24 @@ var _ = SIGDescribe("Downward API", func() {
 })
 
 var _ = SIGDescribe("Downward API [Serial] [Disruptive] [NodeFeature:DownwardAPIHugePages]", func() {
-	f := framework.NewDefaultFramework("downward-api")
+	secretValue := imageutils.GetSecrets()
+	secrets := strings.Split(secretValue, ":")
+	secretName := secrets[0]
+	f := framework.NewDefaultFramework("downward-api", secretValue)
 	f.NamespacePodSecurityEnforceLevel = admissionapi.LevelPrivileged
 
 	ginkgo.Context("Downward API tests for hugepages", func() {
-		ginkgo.It("should provide container's limits.hugepages-<pagesize> and requests.hugepages-<pagesize> as env vars", func() {
+
+		ginkgo.It("[DownwardAPI] should provide container's limits.hugepages-<pagesize> and requests.hugepages-<pagesize> as env vars", func() {
 			podName := "downward-api-" + string(uuid.NewUUID())
+			secretValue := imageutils.GetSecrets()
+			secrets := strings.Split(secretValue, ":")
+			secretName := secrets[0]
 			env := []v1.EnvVar{
+				{
+					Name:  "SECRETS",
+					Value: secretValue,
+				},
 				{
 					Name: "HUGEPAGES_LIMIT",
 					ValueFrom: &v1.EnvVarSource{
@@ -340,15 +411,27 @@ var _ = SIGDescribe("Downward API [Serial] [Disruptive] [NodeFeature:DownwardAPI
 							Env: env,
 						},
 					},
+					ImagePullSecrets: []v1.LocalObjectReference{
+						{
+							Name: secretName,
+						},
+					},
 					RestartPolicy: v1.RestartPolicyNever,
 				},
 			}
 			testDownwardAPIUsingPod(f, pod, env, expectations)
 		})
 
-		ginkgo.It("should provide default limits.hugepages-<pagesize> from node allocatable", func() {
+		ginkgo.It("[DownwardAPI] should provide default limits.hugepages-<pagesize> from node allocatable", func() {
 			podName := "downward-api-" + string(uuid.NewUUID())
+
+			secretValue := imageutils.GetSecrets()
+
 			env := []v1.EnvVar{
+				{
+					Name:  "SECRETS",
+					Value: secretValue,
+				},
 				{
 					Name: "HUGEPAGES_LIMIT",
 					ValueFrom: &v1.EnvVarSource{
@@ -377,6 +460,11 @@ var _ = SIGDescribe("Downward API [Serial] [Disruptive] [NodeFeature:DownwardAPI
 						},
 					},
 					RestartPolicy: v1.RestartPolicyNever,
+					ImagePullSecrets: []v1.LocalObjectReference{
+						{
+							Name: secretName,
+						},
+					},
 				},
 			}
 
@@ -387,6 +475,9 @@ var _ = SIGDescribe("Downward API [Serial] [Disruptive] [NodeFeature:DownwardAPI
 })
 
 func testDownwardAPI(f *framework.Framework, podName string, env []v1.EnvVar, expectations []string) {
+	secretValue := imageutils.GetSecrets()
+	secrets := strings.Split(secretValue, ":")
+	secretName := secrets[0]
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   podName,
@@ -412,9 +503,15 @@ func testDownwardAPI(f *framework.Framework, podName string, env []v1.EnvVar, ex
 				},
 			},
 			RestartPolicy: v1.RestartPolicyNever,
+			ImagePullSecrets: []v1.LocalObjectReference{
+				{
+					Name: secretName,
+				},
+			},
 		},
 	}
 
+	fmt.Fprintf(ginkgo.GinkgoWriter, "pod %s", pod)
 	testDownwardAPIUsingPod(f, pod, env, expectations)
 }
 

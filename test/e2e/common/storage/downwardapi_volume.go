@@ -268,12 +268,20 @@ var _ = SIGDescribe("Downward API volume", func() {
 
 func downwardAPIVolumePodForModeTest(name, filePath string, itemMode, defaultMode *int32) *v1.Pod {
 	pod := downwardAPIVolumeBasePod(name, nil, nil)
+	secretValue := imageutils.GetSecrets()
+	env := []v1.EnvVar{
+		{
 
+			Name:  "SECRETS",
+			Value: secretValue,
+		},
+	}
 	pod.Spec.Containers = []v1.Container{
 		{
 			Name:  "client-container",
 			Image: imageutils.GetE2EImage(imageutils.Agnhost),
 			Args:  []string{"mounttest", "--file_mode=" + filePath},
+			Env:   env,
 			VolumeMounts: []v1.VolumeMount{
 				{
 					Name:      "podinfo",
@@ -294,12 +302,21 @@ func downwardAPIVolumePodForModeTest(name, filePath string, itemMode, defaultMod
 
 func downwardAPIVolumePodForSimpleTest(name string, filePath string) *v1.Pod {
 	pod := downwardAPIVolumeBasePod(name, nil, nil)
+	secretValue := imageutils.GetSecrets()
+	env := []v1.EnvVar{
+		{
+
+			Name:  "SECRETS",
+			Value: secretValue,
+		},
+	}
 
 	pod.Spec.Containers = []v1.Container{
 		{
 			Name:  "client-container",
 			Image: imageutils.GetE2EImage(imageutils.Agnhost),
 			Args:  []string{"mounttest", "--file_content=" + filePath},
+			Env:   env,
 			VolumeMounts: []v1.VolumeMount{
 				{
 					Name:      "podinfo",
@@ -326,11 +343,19 @@ func downwardAPIVolumeForDefaultContainerResources(name string, filePath string)
 }
 
 func downwardAPIVolumeBaseContainers(name, filePath string) []v1.Container {
+	secretValue := imageutils.GetSecrets()
+	env := []v1.EnvVar{
+		{
+			Name:  "SECRETS",
+			Value: secretValue,
+		},
+	}
 	return []v1.Container{
 		{
 			Name:  name,
 			Image: imageutils.GetE2EImage(imageutils.Agnhost),
 			Args:  []string{"mounttest", "--file_content=" + filePath},
+			Env:   env,
 			Resources: v1.ResourceRequirements{
 				Requests: v1.ResourceList{
 					v1.ResourceCPU:    resource.MustParse("250m"),
@@ -354,11 +379,19 @@ func downwardAPIVolumeBaseContainers(name, filePath string) []v1.Container {
 }
 
 func downwardAPIVolumeDefaultBaseContainer(name, filePath string) []v1.Container {
+	secretValue := imageutils.GetSecrets()
+	env := []v1.EnvVar{
+		{
+			Name:  "SECRETS",
+			Value: secretValue,
+		},
+	}
 	return []v1.Container{
 		{
 			Name:  name,
 			Image: imageutils.GetE2EImage(imageutils.Agnhost),
 			Args:  []string{"mounttest", "--file_content=" + filePath},
+			Env:   env,
 			VolumeMounts: []v1.VolumeMount{
 				{
 					Name:      "podinfo",
@@ -372,12 +405,21 @@ func downwardAPIVolumeDefaultBaseContainer(name, filePath string) []v1.Container
 
 func downwardAPIVolumePodForUpdateTest(name string, labels, annotations map[string]string, filePath string) *v1.Pod {
 	pod := downwardAPIVolumeBasePod(name, labels, annotations)
+	secretValue := imageutils.GetSecrets()
+	env := []v1.EnvVar{
+		{
+
+			Name:  "SECRETS",
+			Value: secretValue,
+		},
+	}
 
 	pod.Spec.Containers = []v1.Container{
 		{
 			Name:  "client-container",
 			Image: imageutils.GetE2EImage(imageutils.Agnhost),
 			Args:  []string{"mounttest", "--break_on_expected_content=false", "--retry_time=120", "--file_content_in_loop=" + filePath},
+			Env:   env,
 			VolumeMounts: []v1.VolumeMount{
 				{
 					Name:      "podinfo",

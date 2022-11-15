@@ -379,6 +379,16 @@ func GetPauseImageName() string {
 	return GetE2EImage(Pause)
 }
 
+func GetSecrets() string {
+	if secretName := os.Getenv("SECRET"); len(secretName) > 0 {
+		fmt.Println("got secret, value", secretName)
+		return secretName
+
+	}
+
+	return "None:See"
+}
+
 // ReplaceRegistryInImageURL replaces the registry in the image URL with a custom one based
 // on the configured registries.
 func ReplaceRegistryInImageURL(imageURL string) (string, error) {
