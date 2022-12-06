@@ -23,6 +23,7 @@ package framework
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -31,6 +32,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -46,6 +48,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	scaleclient "k8s.io/client-go/scale"
+	imageutils "k8s.io/kubernetes/test/utils/image"
 	admissionapi "k8s.io/pod-security-admission/api"
 
 	"github.com/onsi/ginkgo/v2"
@@ -55,6 +58,10 @@ const (
 	// DefaultNamespaceDeletionTimeout is timeout duration for waiting for a namespace deletion.
 	DefaultNamespaceDeletionTimeout = 5 * time.Minute
 )
+
+type patch struct {
+	ImagePullSecrets []v1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+}
 
 var (
 	// NewFrameworkExtensions lists functions that get called by
@@ -261,6 +268,7 @@ func (f *Framework) BeforeEach() {
 		} else {
 			Logf("Skipping waiting for service account")
 		}
+
 		f.UniqueName = f.Namespace.GetName()
 	} else {
 		// not guaranteed to be unique, but very likely
@@ -396,6 +404,7 @@ func (f *Framework) AfterEach() {
 // deleting the namespace towards the end.
 func (f *Framework) DeleteNamespace(name string) {
 	defer func() {
+		time.Sleep(15 * time.Second)
 		err := f.ClientSet.CoreV1().Namespaces().Delete(context.TODO(), name, metav1.DeleteOptions{})
 		if err != nil && !apierrors.IsNotFound(err) {
 			Logf("error deleting namespace %s: %v", name, err)
@@ -450,14 +459,15 @@ func (f *Framework) CreateNamespace(baseName string, labels map[string]string) (
 	// check ns instead of err to see if it's nil as we may
 	// fail to create serviceAccount in it.
 	f.AddNamespacesToDelete(ns)
-	fmt.Fprintf(ginkgo.GinkgoWriter, "SecretCreate %s", f.Secret)
-	log("level", "is secret created here number %s %s", len(f.Secret[0]), f.Secret[0])
 
-	if len(f.Secret) > 0 && len(f.Secret[0]) > 0 {
-		secretsInfo := strings.Split(f.Secret[0], ":")
-		fmt.Println("SecretsInfo", secretsInfo)
-		secretName := secretsInfo[0]
-		secretNamespace := secretsInfo[1]
+	secretValue := imageutils.GetSecrets()
+	fmt.Println("Getting secret value", secretValue)
+
+	if len(secretValue) > 0 {
+		fmt.Println(secretValue)
+		secrets := strings.Split(secretValue, ":")
+		secretName := secrets[0]
+		secretNamespace := secrets[1]
 
 		secret, err := f.ClientSet.CoreV1().Secrets(secretNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 		fmt.Println("Creating secrets", secret)
@@ -474,12 +484,22 @@ func (f *Framework) CreateNamespace(baseName string, labels map[string]string) (
 			Type: secret.Type,
 		}
 
-		fmt.Println("Namespace", ns.Name)
 		_, err = f.ClientSet.CoreV1().Secrets(ns.Name).Create(context.TODO(), newSecret, metav1.CreateOptions{})
-		log("level", "dumping secrets %s", newSecret)
-
 		if err != nil {
 			return ns, err
+		}
+
+		saPatch := patch{}
+		saPatch.ImagePullSecrets = append(saPatch.ImagePullSecrets, v1.LocalObjectReference{Name: secret.Name})
+
+		patchData, err := json.Marshal(saPatch)
+		if err != nil {
+			return ns, err
+		}
+
+		svc, err := f.ClientSet.CoreV1().ServiceAccounts(ns.Name).Patch(context.TODO(), "default", types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		if err != nil {
+			return ns, fmt.Errorf("[%s] Failed to patch imagePullSecrets to service account [%s]: %v", "default", secret.Name, err)
 		}
 
 	}

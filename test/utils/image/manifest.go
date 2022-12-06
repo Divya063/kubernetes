@@ -380,13 +380,12 @@ func GetPauseImageName() string {
 }
 
 func GetSecrets() string {
-	if secretName := os.Getenv("SECRET"); len(secretName) > 0 {
-		fmt.Println("got secret, value", secretName)
+	if secretName := os.Getenv("IMAGE_SECRET"); len(secretName) > 0 {
 		return secretName
 
 	}
 
-	return "None:See"
+	return ""
 }
 
 // ReplaceRegistryInImageURL replaces the registry in the image URL with a custom one based
