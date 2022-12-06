@@ -23,6 +23,7 @@ package framework
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -31,12 +32,14 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/discovery"
 	cacheddiscovery "k8s.io/client-go/discovery/cached/memory"
@@ -55,6 +58,10 @@ const (
 	// DefaultNamespaceDeletionTimeout is timeout duration for waiting for a namespace deletion.
 	DefaultNamespaceDeletionTimeout = 5 * time.Minute
 )
+
+type patch struct {
+	ImagePullSecrets []v1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+}
 
 var (
 	// NewFrameworkExtensions lists functions that get called by
@@ -252,6 +259,7 @@ func (f *Framework) BeforeEach() {
 		} else {
 			Logf("Skipping waiting for service account")
 		}
+
 		f.UniqueName = f.Namespace.GetName()
 	} else {
 		// not guaranteed to be unique, but very likely
@@ -441,6 +449,38 @@ func (f *Framework) CreateNamespace(baseName string, labels map[string]string) (
 	// check ns instead of err to see if it's nil as we may
 	// fail to create serviceAccount in it.
 	f.AddNamespacesToDelete(ns)
+
+	if TestContext.DockerConfigFile != "" {
+		contents, err := os.ReadFile(TestContext.DockerConfigFile)
+		ExpectNoError(err)
+		auth := string(contents)
+
+		secret := &v1.Secret{
+			Data: map[string][]byte{v1.DockerConfigJsonKey: []byte(auth)},
+			Type: v1.SecretTypeDockerConfigJson,
+		}
+		secret.Name = "image-pull-secret-" + string(uuid.NewUUID())
+		ginkgo.By("create image pull secret")
+
+		_, err = f.ClientSet.CoreV1().Secrets(ns.Name).Create(context.TODO(), secret, metav1.CreateOptions{})
+		if err != nil {
+			return ns, err
+		}
+
+		saPatch := patch{}
+		saPatch.ImagePullSecrets = append(saPatch.ImagePullSecrets, v1.LocalObjectReference{Name: secret.Name})
+
+		patchData, err := json.Marshal(saPatch)
+		if err != nil {
+			return ns, err
+		}
+
+		svc, err := f.ClientSet.CoreV1().ServiceAccounts(ns.Name).Patch(context.TODO(), "default", types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		if err != nil {
+			return ns, fmt.Errorf("[%s] Failed to patch imagePullSecrets to service account [%s]: %v", svc.Name, secret.Name, err)
+		}
+
+	}
 
 	return ns, err
 }
