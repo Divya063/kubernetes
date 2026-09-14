@@ -231,6 +231,7 @@ func TestConvertToRuntimeSecurityContextCgroupOptions(t *testing.T) {
 					Namespace: "new",
 				},
 				Spec: v1.PodSpec{
+					SecurityContext: &v1.PodSecurityContext{},
 					Containers: []v1.Container{
 						{
 							Name:            "foo",

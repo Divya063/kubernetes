@@ -210,3 +210,31 @@ func TestDetermineEffectiveRunAsUser(t *testing.T) {
 		})
 	}
 }
+
+func TestDetermineEffectiveSecurityContextCgroupOptions(t *testing.T) {
+	writable := v1.CgroupMountModeWritable
+	pod := &v1.Pod{
+		Spec: v1.PodSpec{
+			SecurityContext: &v1.PodSecurityContext{},
+		},
+	}
+	container := &v1.Container{
+		SecurityContext: &v1.SecurityContext{
+			CgroupOptions: &v1.CgroupOptions{MountMode: &writable},
+		},
+	}
+
+	effective := DetermineEffectiveSecurityContext(pod, container)
+	if effective.CgroupOptions == nil || effective.CgroupOptions.MountMode == nil {
+		t.Fatal("expected effective security context to include cgroup options")
+	}
+	if *effective.CgroupOptions.MountMode != v1.CgroupMountModeWritable {
+		t.Errorf("effective mount mode = %q, want %q", *effective.CgroupOptions.MountMode, v1.CgroupMountModeWritable)
+	}
+	if effective.CgroupOptions == container.SecurityContext.CgroupOptions {
+		t.Error("effective cgroup options shares the container cgroup options")
+	}
+	if effective.CgroupOptions.MountMode == container.SecurityContext.CgroupOptions.MountMode {
+		t.Error("effective mount mode shares the container mount mode")
+	}
+}
